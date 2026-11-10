@@ -1,0 +1,257 @@
+
+#!/bin/bash
+
+# =====================================================
+# PROGRAM 6: AUTOMATED BUILD PIPELINE USING DOCKER HUB
+# =====================================================
+
+set -Eeuo pipefail
+
+trap 'echo "ERROR at line $LINENO"; echo "Check the error message above."' ERR
+
+echo "===== PROGRAM 6 STARTED ====="
+
+# CHECK REQUIRED SOFTWARE
+for cmd in docker git node npm curl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "$cmd is missing."
+        echo "Install using: sudo apt install -y docker.io git nodejs npm curl"
+        exit 1
+    fi
+done
+
+# CHECK DOCKER
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker permission or daemon error."
+    echo "Run: sudo systemctl enable --now docker"
+    echo "Run: sudo usermod -aG docker \$USER"
+    echo "Log out and log in again, then rerun."
+    exit 1
+fi
+
+# CREATE INDEX.JS
+cat > index.js <<'EOF'
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/html'
+    });
+
+    res.end(`
+        <h1>Welcome to Program 6!</h1>
+        <h2>Docker Build Pipeline Successful</h2>
+        <p>Running using Docker Container</p>
+    `);
+});
+
+server.listen(3000, () => {
+    console.log('Server running on port 3000');
+});
+EOF
+
+# CREATE PACKAGE.JSON
+cat > package.json <<'EOF'
+{
+  "name": "program-6",
+  "version": "1.0.0",
+  "description": "Automated Docker build pipeline",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
+EOF
+
+# GENERATE PACKAGE-LOCK.JSON
+npm install --package-lock-only --ignore-scripts
+
+# CREATE DOCKERFILE
+cat > Dockerfile <<'EOF'
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --omit=dev
+
+COPY index.js .
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+EOF
+
+# CREATE DOCKERIGNORE
+cat > .dockerignore <<'EOF'
+node_modules
+.git
+.env
+abc.txt
+EOF
+
+# CREATE GITIGNORE
+cat > .gitignore <<'EOF'
+node_modules/
+.env
+EOF
+
+# CREATE README
+cat > README.md <<'EOF'
+# Program 6 - Automated Build Pipeline Using Docker Hub
+
+## Objective
+To build and distribute Docker images using Docker Hub
+and GitHub Container Registry.
+
+## Technologies
+- Docker
+- Node.js
+- GitHub
+- Docker Hub
+- GHCR
+
+## Execution
+Run: bash abc.txt
+
+## Expected Output
+Docker image successfully built and pushed to registries.
+EOF
+
+echo "Project files created successfully."
+
+# INSTALL NODE DEPENDENCIES
+npm install
+
+# BUILD DOCKER IMAGE
+echo "Building Docker image..."
+
+docker build -t program-6:latest .
+
+# DISPLAY IMAGES
+docker images
+
+# CHECK PORT 3000
+if curl -s http://localhost:3000 >/dev/null; then
+    echo "Port 3000 is already serving an application."
+    echo "Stop the existing application before continuing."
+    exit 1
+fi
+
+# REMOVE OLD CONTAINER
+docker rm -f program6-container >/dev/null 2>&1 || true
+
+# RUN CONTAINER
+docker run -d \
+    -p 3000:3000 \
+    --name program6-container \
+    program-6:latest
+
+sleep 3
+
+# TEST APPLICATION
+echo "Testing application..."
+
+if curl -fsS http://localhost:3000; then
+    echo ""
+    echo "Application running successfully."
+else
+    docker logs program6-container
+    exit 1
+fi
+
+# REMOVE TEST CONTAINER
+docker rm -f program6-container
+
+# DOCKER HUB LOGIN
+echo "===== DOCKER HUB LOGIN ====="
+
+read -r -p "Docker Hub username: " DOCKERHUB_USERNAME
+read -r -s -p "Docker Hub PAT: " DOCKERHUB_PAT
+echo
+
+printf '%s' "$DOCKERHUB_PAT" |
+docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+unset DOCKERHUB_PAT
+
+# TAG DOCKER HUB IMAGE
+docker tag program-6:latest \
+"$DOCKERHUB_USERNAME/program-6:latest"
+
+# PUSH TO DOCKER HUB
+docker push "$DOCKERHUB_USERNAME/program-6:latest"
+
+echo "Docker Hub upload successful."
+
+# GITHUB CONTAINER REGISTRY LOGIN
+echo "===== GHCR LOGIN ====="
+
+read -r -s -p "GitHub Classic PAT: " GITHUB_PAT
+echo
+
+printf '%s' "$GITHUB_PAT" |
+docker login ghcr.io -u Spurthy-23 --password-stdin
+
+unset GITHUB_PAT
+
+# TAG GHCR IMAGE
+docker tag program-6:latest \
+ghcr.io/spurthy-23/program-6:latest
+
+# PUSH TO GHCR
+docker push ghcr.io/spurthy-23/program-6:latest
+
+echo "GHCR upload successful."
+
+# INITIALIZE GIT
+if [ ! -d ".git" ]; then
+    git init
+fi
+
+git branch -M main
+
+# CONFIGURE GIT
+git config user.name "Spurthy-23"
+git config user.email "YOUR_GITHUB_EMAIL"
+
+# ADD FILES
+git add .
+
+# COMMIT
+if ! git diff --cached --quiet; then
+    git commit -m "Completed DevOps Program 6"
+fi
+
+# CONNECT GITHUB
+GITHUB_REPO="https://github.com/Spurthy-23/program-6.git"
+
+if git remote get-url origin >/dev/null 2>&1; then
+    git remote set-url origin "$GITHUB_REPO"
+else
+    git remote add origin "$GITHUB_REPO"
+fi
+
+# PUSH SOURCE CODE TO GITHUB
+git push -u origin main
+
+# FINAL OUTPUT
+echo ""
+echo "=================================="
+echo "     PROGRAM 6 COMPLETED!"
+echo "=================================="
+
+echo "GitHub:"
+echo "https://github.com/Spurthy-23/program-6"
+
+echo "Docker Hub:"
+echo "https://hub.docker.com/repositories"
+
+echo "GHCR:"
+echo "https://github.com/users/Spurthy-23/packages"
+
+echo "Created files:"
+ls -la
+
+echo "===== END OF PROGRAM 6 ====="

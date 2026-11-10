@@ -1,0 +1,10 @@
+
+{
+  "name": "program-6",
+  "version": "1.0.0",
+  "description": "Automated Docker build pipeline",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
